@@ -41,9 +41,27 @@
   .login-note { color: var(--muted); font-size: 12px; text-align: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
   #newMap { width: 140px; }
 
+  .layout {
+    display: grid; gap: 16px; padding: 20px 24px; max-width: 1900px; margin: 0 auto;
+    grid-template-columns: 300px 1fr; align-items: start;
+  }
+
   .grid {
-    display: grid; gap: 16px; padding: 20px 24px; max-width: 1600px; margin: 0 auto;
+    display: grid; gap: 16px; min-width: 0;
     grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); align-items: start;
+  }
+  .card.overall {
+    --c1: #f5c542; --c2: #ffe08a;
+    --pat: radial-gradient(circle at 90% 50%, rgba(255,220,100,.25) 0 18px, transparent 19px);
+    position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto;
+  }
+  .card.overall:hover { transform: none; }
+  td.pts { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--c2); white-space: nowrap; }
+  td.maps { text-align: right; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .overall td.name { max-width: 110px; }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; padding: 16px 12px; }
+    .card.overall { position: static; max-height: none; }
   }
   .card {
     --c1: #ff7a1a; --c2: #ffb347; --pat: none;
@@ -87,7 +105,7 @@
   .err.ok { color: var(--c2); }
   tr.me td.name { color: var(--c2); font-weight: 600; }
   button:disabled { opacity: .6; cursor: wait; }
-  .hint { color: var(--muted); font-size: 12px; padding: 0 24px; max-width: 1600px; margin: 12px auto 0; }
+  .hint { color: var(--muted); font-size: 12px; padding: 0 24px; max-width: 1900px; margin: 12px auto 0; }
 </style>
 </head>
 <body>
@@ -107,7 +125,10 @@
   <form class="field" id="addMapForm"><input id="newMap" placeholder="Neue Map…" maxlength="60"><button class="primary" type="submit">+</button></form>
 </header>
 <div class="hint" id="hint"></div>
-<div class="grid" id="grid"></div>
+<div class="layout">
+  <aside class="card overall" id="overall"></aside>
+  <div class="grid" id="grid"></div>
+</div>
 
 <script>
 // ====== HIER DEINE SUPABASE-DATEN EINTRAGEN (siehe Anleitung) ======
@@ -288,23 +309,77 @@ function shiftHue(hex, deg) {
   return `hsl(${Math.round((h + deg + 360) % 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`;
 }
 
-function rowsFor(mapId) {
+const personKey = (name) => name.toLowerCase();
+
+function rowsFor(mapId, bestOnly = $('bestOnly').checked) {
   let rows = data.scores.filter((s) => s.mapId === mapId).sort((a, b) => a.ms - b.ms || a.date.localeCompare(b.date));
-  if ($('bestOnly').checked) {
+  if (bestOnly) {
     const seen = new Set();
-    rows = rows.filter((s) => { const k = s.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+    rows = rows.filter((s) => { const k = personKey(s.name); if (seen.has(k)) return false; seen.add(k); return true; });
   }
   return rows;
 }
 
+// Gleicher Wert = gleicher Rang (1, 2, 2, 4 …)
+function ranksOf(list, same) {
+  let rank = 0;
+  return list.map((x, i) => (rank = i > 0 && same(x, list[i - 1]) ? rank : i + 1));
+}
+
+// ---------- Gesamtwertung ----------
+// Pro Map zählt die Bestzeit jeder Person: 1. Platz 7 Punkte, 2. Platz 6 … ab dem 7. Platz 1 Punkt, nicht gespielt 0.
+const MAX_POINTS = 7;
+const pointsFor = (rank) => Math.max(1, MAX_POINTS + 1 - rank);
+
+function overallStandings() {
+  const tot = new Map();
+  for (const m of data.maps) {
+    const rows = rowsFor(m.id, true);
+    const ranks = ranksOf(rows, (a, b) => a.ms === b.ms);
+    rows.forEach((s, i) => {
+      const k = personKey(s.name);
+      const t = tot.get(k) || { name: s.name, userIds: new Set(), pts: 0, wins: 0, played: 0 };
+      t.pts += pointsFor(ranks[i]);
+      t.played++;
+      if (ranks[i] === 1) t.wins++;
+      if (s.userId) t.userIds.add(s.userId);
+      tot.set(k, t);
+    });
+  }
+  return [...tot.values()].sort((a, b) => b.pts - a.pts || b.wins - a.wins || a.name.localeCompare(b.name));
+}
+
+function renderOverall() {
+  const list = overallStandings();
+  const ranks = ranksOf(list, (a, b) => a.pts === b.pts);
+  const maps = data.maps.length;
+  const body = list.length
+    ? `<table>${list.map((t, i) => {
+        const mine = session && (t.userIds.has(session.user_id) || personKey(t.name) === personKey(session.username));
+        const cls = [ranks[i] <= 3 ? 'r' + ranks[i] : '', mine ? 'me' : ''].join(' ').trim();
+        return `<tr class="${cls}">
+          <td class="rank">${ranks[i]}</td>
+          <td class="name" title="${esc(t.name)}">${esc(t.name)}</td>
+          <td class="maps" title="Maps gespielt / Map-Siege">${t.played}/${maps}${t.wins ? ` · ${t.wins}🥇` : ''}</td>
+          <td class="pts">${t.pts}</td>
+        </tr>`;
+      }).join('')}</table>`
+    : '<div class="empty">Noch keine Zeiten 🏁</div>';
+  $('overall').innerHTML = `
+    <div class="banner"><h2><span class="ico">🏆</span>Gesamtwertung</h2><small>Punkte</small></div>
+    <div class="body">${body}
+      <div class="login-note">Pro Map: 1. Platz ${MAX_POINTS} Pkt, 2. Platz ${MAX_POINTS - 1} … ab ${MAX_POINTS}. Platz 1 Pkt, nicht gespielt 0. Gezählt wird die Bestzeit pro Person.</div>
+    </div>`;
+}
+
 function render() {
+  renderOverall();
   $('grid').innerHTML = data.maps.map((m) => {
     const rows = rowsFor(m.id);
     const open = expanded.has(m.id);
     const shown = open ? rows : rows.slice(0, TOP_N);
     const best = rows[0]?.ms;
-    let rank = 0;
-    const ranks = rows.map((s, i) => (rank = i > 0 && s.ms === rows[i - 1].ms ? rank : i + 1));
+    const ranks = ranksOf(rows, (a, b) => a.ms === b.ms);
     const table = rows.length
       ? `<table>${shown.map((s, i) => {
           const mine = session && s.userId === session.user_id;
