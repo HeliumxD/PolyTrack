@@ -53,15 +53,20 @@
   .card.overall {
     --c1: #f5c542; --c2: #ffe08a;
     --pat: radial-gradient(circle at 90% 50%, rgba(255,220,100,.25) 0 18px, transparent 19px);
+  }
+  .side {
+    display: flex; flex-direction: column; gap: 16px;
     position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto;
   }
-  .card.overall:hover { transform: none; }
+  .side .card:hover { transform: none; }
+  .side .card { flex-shrink: 0; }
+  td.nef { color: var(--muted); font-weight: 600; }
   td.pts { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--c2); white-space: nowrap; }
   td.maps { text-align: right; color: var(--muted); font-size: 12px; white-space: nowrap; }
   .overall td.name { max-width: 110px; }
   @media (max-width: 800px) {
     .layout { grid-template-columns: 1fr; padding: 16px 12px; }
-    .card.overall { position: static; max-height: none; }
+    .side { position: static; max-height: none; overflow: visible; }
   }
   .card {
     --c1: #ff7a1a; --c2: #ffb347; --pat: none;
@@ -126,7 +131,10 @@
 </header>
 <div class="hint" id="hint"></div>
 <div class="layout">
-  <aside class="card overall" id="overall"></aside>
+  <aside class="side">
+    <section class="card overall" id="overall"></section>
+    <div id="bosses" style="display:contents"></div>
+  </aside>
   <div class="grid" id="grid"></div>
 </div>
 
@@ -267,11 +275,11 @@ async function doLoad() {
 
 // Jede Map bekommt ein eigenes Farbthema, Icon und Muster
 const THEMES = [
-  { re: /summer|sommer/i, c1: '#4cc35a', c2: '#f5d442', ico: '☀️',
+  { re: /summer|sommer/i, boss: 'Summer Boss', c1: '#4cc35a', c2: '#f5d442', ico: '☀️',
     pat: 'radial-gradient(circle at 92% 30%, rgba(255,225,90,.45) 0 22px, transparent 23px)' },
-  { re: /winter/i, c1: '#58b8ff', c2: '#bfe9ff', ico: '❄️',
+  { re: /winter/i, boss: 'Winter Boss', c1: '#58b8ff', c2: '#bfe9ff', ico: '❄️',
     pat: 'radial-gradient(rgba(255,255,255,.4) 1.5px, transparent 2px) 0 0/16px 16px' },
-  { re: /desert|wüste|wueste/i, c1: '#e8893a', c2: '#f3c874', ico: '🏜️',
+  { re: /desert|wüste|wueste/i, boss: 'Desert Boss', c1: '#e8893a', c2: '#f3c874', ico: '🏜️',
     pat: 'repeating-linear-gradient(160deg, rgba(255,200,120,.14) 0 10px, transparent 10px 22px)' },
 ];
 const EXTRA_ICONS = ['🏁', '🚗', '🏎️', '⚡', '🔥', '🌋', '🌲', '🌃', '🚀', '🌊'];
@@ -372,8 +380,62 @@ function renderOverall() {
     </div>`;
 }
 
+// ---------- Boss-Ranglisten (Summer / Winter / Desert) ----------
+// Summe der Bestzeiten über alle Maps einer Welt; wer nicht alle gespielt hat: NEF
+function bossStandings(worldMaps) {
+  const tot = new Map();
+  for (const m of worldMaps) {
+    for (const s of rowsFor(m.id, true)) {
+      const k = personKey(s.name);
+      const t = tot.get(k) || { name: s.name, userIds: new Set(), sum: 0, played: 0 };
+      t.sum += s.ms;
+      t.played++;
+      if (s.userId) t.userIds.add(s.userId);
+      tot.set(k, t);
+    }
+  }
+  const all = [...tot.values()].map((t) => ({ ...t, done: t.played === worldMaps.length }));
+  const done = all.filter((t) => t.done).sort((a, b) => a.sum - b.sum || a.name.localeCompare(b.name));
+  const nef = all.filter((t) => !t.done).sort((a, b) => b.played - a.played || a.name.localeCompare(b.name));
+  return { done, nef };
+}
+
+function renderBosses() {
+  $('bosses').innerHTML = THEMES.map((th) => {
+    const worldMaps = data.maps.filter((m) => th.re.test(m.name));
+    if (!worldMaps.length) return '';
+    const { done, nef } = bossStandings(worldMaps);
+    const ranks = ranksOf(done, (a, b) => a.sum === b.sum);
+    const best = done[0]?.sum;
+    const isMe = (t) => session && (t.userIds.has(session.user_id) || personKey(t.name) === personKey(session.username));
+    const rows = [
+      ...done.map((t, i) => {
+        const cls = [ranks[i] <= 3 ? 'r' + ranks[i] : '', isMe(t) ? 'me' : ''].join(' ').trim();
+        return `<tr class="${cls}">
+          <td class="rank">${ranks[i]}</td>
+          <td class="name" title="${esc(t.name)}">${esc(t.name)}</td>
+          <td class="time">${fmt(t.sum)}</td>
+          <td class="diff">${t.sum === best ? '' : '+' + ((t.sum - best) / 1000).toFixed(3)}</td>
+        </tr>`;
+      }),
+      ...nef.map((t) => `<tr class="${isMe(t) ? 'me' : ''}">
+          <td class="rank">–</td>
+          <td class="name" title="${esc(t.name)}">${esc(t.name)}</td>
+          <td class="time nef" title="Noch nicht alle Maps gespielt">NEF</td>
+          <td class="diff">${t.played}/${worldMaps.length}</td>
+        </tr>`),
+    ];
+    const body = rows.length ? `<table>${rows.join('')}</table>` : '<div class="empty">Noch keine Zeiten 🏁</div>';
+    return `<section class="card" style="--c1:${th.c1};--c2:${th.c2};--pat:${th.pat}">
+      <div class="banner"><h2><span class="ico">${th.ico}</span>${th.boss}</h2><small>${worldMaps.length} Maps</small></div>
+      <div class="body">${body}</div>
+    </section>`;
+  }).join('');
+}
+
 function render() {
   renderOverall();
+  renderBosses();
   $('grid').innerHTML = data.maps.map((m) => {
     const rows = rowsFor(m.id);
     const open = expanded.has(m.id);
