@@ -1,0 +1,65 @@
+{
+  "maps": [
+    {
+      "id": "b99cbb32-2cf2-467f-a669-acfc18f613a7",
+      "name": "Summer 1"
+    },
+    {
+      "id": "d9930568-b1f6-4980-86d6-3989caa0aa9a",
+      "name": "Summer 2"
+    },
+    {
+      "id": "7fb1da11-cf72-48e2-9b15-114f504f55d8",
+      "name": "Summer 3"
+    },
+    {
+      "id": "e53223e8-fbce-4722-8e29-98f44c258382",
+      "name": "Summer 4"
+    },
+    {
+      "id": "b9911674-23e4-4044-b65c-a929575f8aad",
+      "name": "Summer 5"
+    },
+    {
+      "id": "9829e823-6496-493b-bfbc-c37cd337d1d6",
+      "name": "Winter 1"
+    },
+    {
+      "id": "2b986327-2f0e-4b76-87e9-4284bd07d443",
+      "name": "Winter 2"
+    },
+    {
+      "id": "f634ae8c-bbec-4560-b22e-a594c134cd2a",
+      "name": "Winter 3"
+    },
+    {
+      "id": "3b95b0a5-f527-4d9b-b2f2-550304feb8d6",
+      "name": "Winter 4"
+    },
+    {
+      "id": "7e76f911-b7d5-46e4-98af-cc64459d32fc",
+      "name": "Winter 5"
+    },
+    {
+      "id": "c557cd9c-db1a-49da-b217-02cd92a8e87a",
+      "name": "Desert 1"
+    },
+    {
+      "id": "d9d44f71-2a54-4980-80ee-edc81ec3cd98",
+      "name": "Desert 2"
+    },
+    {
+      "id": "978d36e4-feee-404b-acf3-cd73678fddf5",
+      "name": "Desert 3"
+    },
+    {
+      "id": "1d74c5cd-bab1-4288-8ca2-8121343516fe",
+      "name": "Desert 4"
+    },
+    {
+      "id": "23013df8-6cd7-4833-8f6f-6c9689f760d8",
+      "name": "Desert 5"
+    }
+  ],
+  "scores": []
+}
