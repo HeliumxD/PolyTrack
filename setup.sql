@@ -56,7 +56,7 @@ create policy "scores_insert" on scores for insert to authenticated with check (
 create policy "scores_delete" on scores for delete to authenticated using (user_id = auth.uid());
 
 insert into maps (name) values
-  ('Summer 1'),('Summer 2'),('Summer 3'),('Summer 4'),('Summer 5'),
+  ('Summer 1'),('Summer 2'),('Summer 3'),('Summer 4'),('Summer 5'),('Summer 6'),('Summer 7'),
   ('Winter 1'),('Winter 2'),('Winter 3'),('Winter 4'),('Winter 5'),
   ('Desert 1'),('Desert 2'),('Desert 3'),('Desert 4'),('Desert 5')
 on conflict do nothing;
