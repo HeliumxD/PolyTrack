@@ -111,6 +111,38 @@
   tr.me td.name { color: var(--c2); font-weight: 600; }
   button:disabled { opacity: .6; cursor: wait; }
   .hint { color: var(--muted); font-size: 12px; padding: 0 24px; max-width: 1900px; margin: 12px auto 0; }
+  /* ---------- Chat ---------- */
+  .chat-btn {
+    position: fixed; right: 20px; bottom: 20px; z-index: 50; width: 56px; height: 56px; border-radius: 50%;
+    border: 0; background: var(--accent); font-size: 26px; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.45);
+  }
+  .chat-btn:hover { background: var(--accent2); }
+  .chat-btn[hidden], .chat[hidden], #chatBadge[hidden] { display: none; }
+  #chatBadge {
+    position: absolute; top: -4px; right: -4px; background: var(--danger); color: #fff; font-size: 12px; font-weight: 700;
+    min-width: 20px; height: 20px; line-height: 20px; border-radius: 10px; padding: 0 5px;
+  }
+  .chat {
+    position: fixed; right: 20px; bottom: 88px; z-index: 50; width: 360px; height: min(520px, calc(100vh - 120px));
+    display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border);
+    border-top: 3px solid var(--accent); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.55); overflow: hidden;
+  }
+  .chat-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .chat-head button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 16px; }
+  .chat-list { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 85%; align-self: flex-start; background: var(--panel2); border-radius: 10px; padding: 6px 10px; }
+  .msg.mine { align-self: flex-end; background: color-mix(in srgb, var(--accent) 22%, var(--panel2)); }
+  .msg .meta { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .msg .meta b { color: var(--text); font-weight: 600; text-transform: capitalize; }
+  .msg .txt { font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg-del { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 11px; padding: 0 2px; opacity: .5; }
+  .msg-del:hover { color: var(--danger); opacity: 1; }
+  .chat-form { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); }
+  .chat-form input { flex: 1; }
+  .chat .err { padding: 0 12px 6px; margin: 0; }
+  @media (max-width: 500px) {
+    .chat { left: 8px; right: 8px; width: auto; bottom: 84px; height: calc(100vh - 160px); }
+  }
 </style>
 </head>
 <body>
@@ -138,6 +170,17 @@
   <div class="grid" id="grid"></div>
 </div>
 
+<button id="chatBtn" class="chat-btn" type="button" title="Chat" hidden>💬<span id="chatBadge" hidden></span></button>
+<section id="chatBox" class="chat" hidden>
+  <div class="chat-head"><b>💬 Chat</b><button id="chatClose" type="button" title="Schliessen">✕</button></div>
+  <div id="chatList" class="chat-list"></div>
+  <div id="chatErr" class="err"></div>
+  <form id="chatForm" class="chat-form" autocomplete="off">
+    <input id="chatInput" placeholder="Nachricht…" maxlength="500">
+    <button class="primary" type="submit">Senden</button>
+  </form>
+</section>
+
 <script>
 // ====== HIER DEINE SUPABASE-DATEN EINTRAGEN (siehe Anleitung) ======
 const SUPABASE_URL = 'https://fsjiffjmjdeevbyibslz.supabase.co'
@@ -156,7 +199,7 @@ function saveSession(sess) {
   const changed = (session && session.user_id) !== (sess && sess.user_id);
   session = sess;
   try { sess ? localStorage.setItem('pt-session', JSON.stringify(sess)) : localStorage.removeItem('pt-session'); } catch {}
-  if (changed) { renderAuth(); render(); }
+  if (changed) { renderAuth(); render(); resetChat(); }
 }
 function toSession(j) {
   return {
@@ -188,6 +231,8 @@ function renderAuth() {
   $('loginForm').hidden = on;
   $('userBox').hidden = !on;
   $('addMapForm').hidden = !on;
+  $('chatBtn').hidden = !on;
+  if (!on) $('chatBox').hidden = true;
   if (on) $('whoami').textContent = session.username;
   $('hint').textContent = on
     ? 'Zeit bei der Map eingeben (m:ss.mmm, z. B. 1:23.456 oder 58.120). Eingetragen wird unter deinem Namen.'
@@ -275,11 +320,11 @@ async function doLoad() {
 
 // Jede Map bekommt ein eigenes Farbthema, Icon und Muster
 const THEMES = [
-  { re: /summer|sommer/i, boss: 'Master of Summer', c1: '#4cc35a', c2: '#f5d442', ico: '☀️',
+  { re: /summer|sommer/i, boss: 'Summer Boss', c1: '#4cc35a', c2: '#f5d442', ico: '☀️',
     pat: 'radial-gradient(circle at 92% 30%, rgba(255,225,90,.45) 0 22px, transparent 23px)' },
-  { re: /winter/i, boss: 'Master of Winter', c1: '#58b8ff', c2: '#bfe9ff', ico: '❄️',
+  { re: /winter/i, boss: 'Winter Boss', c1: '#58b8ff', c2: '#bfe9ff', ico: '❄️',
     pat: 'radial-gradient(rgba(255,255,255,.4) 1.5px, transparent 2px) 0 0/16px 16px' },
-  { re: /desert|wüste|wueste/i, boss: 'Master of Desert', c1: '#e8893a', c2: '#f3c874', ico: '🏜️',
+  { re: /desert|wüste|wueste/i, boss: 'Desert Boss', c1: '#e8893a', c2: '#f3c874', ico: '🏜️',
     pat: 'repeating-linear-gradient(160deg, rgba(255,200,120,.14) 0 10px, transparent 10px 22px)' },
 ];
 const EXTRA_ICONS = ['🏁', '🚗', '🏎️', '⚡', '🔥', '🌋', '🌲', '🌃', '🚀', '🌊'];
@@ -551,8 +596,119 @@ $('logoutBtn').onclick = () => {
   load();
 };
 
+// ---------- Chat ----------
+// Neue Nachrichten werden regelmässig abgefragt: alle 3 s bei offenem Chat, sonst alle 15 s (Tab im Hintergrund: 60 s)
+const CHAT_KEEP = 200;
+const CHAT_FIELDS = 'select=id,user_id,name,text,created_at';
+let chatMsgs = [], chatLast = null, chatLoaded = false, chatUnread = 0, chatTimer = null, chatBusy = false;
+const chatIsOpen = () => !$('chatBox').hidden;
+
+function fmtChatTime(iso) {
+  const d = new Date(iso);
+  const t = d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? t : d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }) + ' ' + t;
+}
+
+function renderChat(toBottom = false) {
+  const list = $('chatList');
+  const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+  list.innerHTML = chatMsgs.length
+    ? chatMsgs.map((m) => {
+        const mine = session && m.user_id === session.user_id;
+        return `<div class="msg${mine ? ' mine' : ''}">
+          <div class="meta"><b>${esc(m.name)}</b> · ${fmtChatTime(m.created_at)}${mine ? ` <button class="msg-del" type="button" data-id="${m.id}" title="Löschen">✕</button>` : ''}</div>
+          <div class="txt">${esc(m.text)}</div>
+        </div>`;
+      }).join('')
+    : `<div class="empty">${chatLoaded ? 'Noch keine Nachrichten – schreib die erste! 👋' : 'Lade …'}</div>`;
+  if (toBottom || atBottom) list.scrollTop = list.scrollHeight;
+  list.querySelectorAll('.msg-del').forEach((b) => b.onclick = async () => {
+    if (!confirm('Nachricht löschen?')) return;
+    try {
+      await sb('messages?id=eq.' + b.dataset.id, { method: 'DELETE' });
+      chatMsgs = chatMsgs.filter((m) => m.id !== b.dataset.id);
+      renderChat();
+    } catch { $('chatErr').textContent = 'Löschen fehlgeschlagen'; }
+  });
+  $('chatBadge').hidden = !chatUnread;
+  $('chatBadge').textContent = chatUnread > 9 ? '9+' : chatUnread;
+}
+
+async function pollChat() {
+  if (!session || chatBusy) return;
+  chatBusy = true;
+  try {
+    // Beim ersten Mal die letzten 100 Nachrichten, danach nur noch neue
+    let rows = chatLast
+      ? await sb(`messages?${CHAT_FIELDS}&created_at=gte.${encodeURIComponent(chatLast)}&order=created_at&limit=100`)
+      : (await sb(`messages?${CHAT_FIELDS}&order=created_at.desc&limit=100`)).reverse();
+    const known = new Set(chatMsgs.map((m) => m.id));
+    const fresh = rows.filter((r) => !known.has(r.id));
+    if (fresh.length) {
+      if (chatLoaded && !chatIsOpen()) chatUnread += fresh.filter((m) => m.user_id !== session.user_id).length;
+      chatMsgs = chatMsgs.concat(fresh).sort((a, b) => a.created_at.localeCompare(b.created_at)).slice(-CHAT_KEEP);
+    }
+    if (rows.length) chatLast = rows[rows.length - 1].created_at;
+    const first = !chatLoaded;
+    chatLoaded = true;
+    $('chatErr').textContent = '';
+    if (fresh.length || first) renderChat(first);
+  } catch (e) {
+    if (chatIsOpen()) $('chatErr').textContent = 'Chat nicht erreichbar – ist die Tabelle "messages" eingerichtet?';
+  } finally { chatBusy = false; }
+}
+
+function scheduleChat(delay) {
+  clearTimeout(chatTimer);
+  if (!session) return;
+  const wait = delay ?? (document.hidden ? 60000 : chatIsOpen() ? 3000 : 15000);
+  chatTimer = setTimeout(async () => { await pollChat(); scheduleChat(); }, wait);
+}
+
+function resetChat() {
+  chatMsgs = []; chatLast = null; chatLoaded = false; chatUnread = 0;
+  $('chatErr').textContent = '';
+  renderChat();
+  scheduleChat(0);
+}
+
+function openChat(open) {
+  $('chatBox').hidden = !open;
+  if (open) {
+    chatUnread = 0;
+    renderChat(true);
+    $('chatInput').focus();
+    scheduleChat(0);
+  }
+}
+$('chatBtn').onclick = () => openChat(!chatIsOpen());
+$('chatClose').onclick = () => openChat(false);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && chatIsOpen()) openChat(false); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleChat(0); });
+
+$('chatForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const input = $('chatInput'), btn = $('chatForm').querySelector('button');
+  const text = input.value.trim();
+  if (!text || btn.disabled) return;
+  btn.disabled = true;
+  $('chatErr').textContent = '';
+  try {
+    const [m] = await sb('messages', { method: 'POST', body: JSON.stringify({ text }) });
+    input.value = '';
+    if (m && !chatMsgs.some((x) => x.id === m.id)) chatMsgs.push(m);
+    renderChat(true);
+  } catch {
+    $('chatErr').textContent = !session ? 'Bitte neu einloggen' : 'Senden fehlgeschlagen – bitte nochmal versuchen';
+  } finally {
+    btn.disabled = false;
+    input.focus();
+  }
+};
+
 $('bestOnly').onchange = render;
 renderAuth();
+resetChat();
 load();
 // Auto-Refresh, aber nicht während jemand gerade eine Zeit tippt oder der Tab im Hintergrund ist
 const isTyping = () => [...document.querySelectorAll('form.quick .t')].some((i) => i.value || i === document.activeElement);
