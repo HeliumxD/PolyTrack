@@ -84,6 +84,14 @@
   .banner h2 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 10px; }
   .banner .ico { font-size: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.4)); }
   .banner small { color: var(--muted); font-size: 12px; }
+  .banner .wr {
+    display: block; margin: 3px 0 0 34px; padding: 0; background: none; border: 0;
+    font: inherit; font-size: 12px; font-weight: 600; color: var(--c2); text-align: left;
+    font-variant-numeric: tabular-nums;
+  }
+  .banner .wr.none { color: var(--muted); font-weight: 400; }
+  .banner button.wr { cursor: pointer; }
+  .banner button.wr:hover { text-decoration: underline; }
   .body { padding: 6px 16px 14px; }
   .card button.primary { background: var(--c1); }
   .card button.primary:hover { background: var(--c2); }
@@ -303,7 +311,7 @@ async function doLoad() {
   }
   try {
     const [maps, scores] = await Promise.all([
-      fetchAll('maps?select=id,name&order=sort,id'),
+      fetchAll('maps?select=*&order=sort,id'),
       fetchAll('scores?select=id,map_id,user_id,name,ms,created_at&order=ms,id'),
     ]);
     data = {
@@ -320,11 +328,11 @@ async function doLoad() {
 
 // Jede Map bekommt ein eigenes Farbthema, Icon und Muster
 const THEMES = [
-  { re: /summer|sommer/i, boss: 'Summer Boss', c1: '#4cc35a', c2: '#f5d442', ico: '☀️',
+  { re: /summer|sommer/i, boss: 'Master of Summer', c1: '#4cc35a', c2: '#f5d442', ico: '☀️',
     pat: 'radial-gradient(circle at 92% 30%, rgba(255,225,90,.45) 0 22px, transparent 23px)' },
-  { re: /winter/i, boss: 'Winter Boss', c1: '#58b8ff', c2: '#bfe9ff', ico: '❄️',
+  { re: /winter/i, boss: 'Master of Winter', c1: '#58b8ff', c2: '#bfe9ff', ico: '❄️',
     pat: 'radial-gradient(rgba(255,255,255,.4) 1.5px, transparent 2px) 0 0/16px 16px' },
-  { re: /desert|wüste|wueste/i, boss: 'Desert Boss', c1: '#e8893a', c2: '#f3c874', ico: '🏜️',
+  { re: /desert|wüste|wueste/i, boss: 'Master of Desert', c1: '#e8893a', c2: '#f3c874', ico: '🏜️',
     pat: 'repeating-linear-gradient(160deg, rgba(255,200,120,.14) 0 10px, transparent 10px 22px)' },
 ];
 const EXTRA_ICONS = ['🏁', '🚗', '🏎️', '⚡', '🔥', '🌋', '🌲', '🌃', '🚀', '🌊'];
@@ -478,6 +486,43 @@ function renderBosses() {
   }).join('');
 }
 
+// ---------- Weltrekord pro Map (manuell eingetragen) ----------
+function wrHtml(m) {
+  if (m.wr_ms) {
+    const best = rowsFor(m.id, true)[0]?.ms;
+    const gap = best ? ` (unsere Beste +${((best - m.wr_ms) / 1000).toFixed(3)} s)` : '';
+    const text = `🌍 WR ${fmt(m.wr_ms)}${m.wr_name ? ' · ' + esc(m.wr_name) : ''}`;
+    const tip = 'Weltrekord' + (best && best > m.wr_ms ? gap : '') + (session ? ' – klicken zum Bearbeiten' : '');
+    return session
+      ? `<button class="wr" type="button" data-id="${m.id}" title="${tip}">${text}</button>`
+      : `<span class="wr" title="${tip}">${text}</span>`;
+  }
+  return session ? `<button class="wr none" type="button" data-id="${m.id}">🌍 WR eintragen</button>` : '';
+}
+
+async function editWorldRecord(mapId) {
+  const m = data.maps.find((x) => x.id === mapId);
+  if (!m) return;
+  const t = prompt(`Weltrekord für ${m.name} (z. B. 0:52.341) – leer lassen zum Entfernen:`, m.wr_ms ? fmt(m.wr_ms) : '');
+  if (t === null) return;
+  let wr_ms = null, wr_name = null;
+  if (t.trim()) {
+    wr_ms = parseTime(t);
+    if (!wr_ms) { alert('Ungültige Zeit – z. B. 0:52.341'); return; }
+    const n = prompt('Wer hält den Weltrekord? (optional)', m.wr_name || '');
+    if (n === null) return;
+    wr_name = n.trim().slice(0, 40) || null;
+  }
+  try {
+    const res = await sb('maps?id=eq.' + m.id, { method: 'PATCH', body: JSON.stringify({ wr_ms, wr_name }) });
+    if (Array.isArray(res) && !res.length) throw new Error('keine Berechtigung');
+  } catch {
+    alert('Speichern fehlgeschlagen – wurde die neue setup.sql in Supabase ausgeführt?');
+    return;
+  }
+  load();
+}
+
 function render() {
   renderOverall();
   renderBosses();
@@ -507,7 +552,7 @@ function render() {
       ? `<button class="more" data-id="${m.id}">${open ? 'Weniger anzeigen' : `Alle ${rows.length} anzeigen`}</button>` : '';
     const t = themeFor(m.name);
     return `<section class="card" data-map="${m.id}" style="--c1:${t.c1};--c2:${t.c2};--pat:${t.pat}">
-      <div class="banner"><h2><span class="ico">${t.ico}</span>${esc(m.name)}</h2><small>${rows.length} ${rows.length === 1 ? 'Zeit' : 'Zeiten'}</small></div>
+      <div class="banner"><div><h2><span class="ico">${t.ico}</span>${esc(m.name)}</h2>${wrHtml(m)}</div><small>${rows.length} ${rows.length === 1 ? 'Zeit' : 'Zeiten'}</small></div>
       <div class="body">
       ${table}${more}
       ${session ? `<form class="quick" data-id="${m.id}" autocomplete="off">
@@ -519,7 +564,7 @@ function render() {
     </section>`;
   }).join('');
 
-  document.querySelectorAll('.more').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('button.wr').forEach((b) => b.onclick = () => editWorldRecord(b.dataset.id));
     expanded.has(b.dataset.id) ? expanded.delete(b.dataset.id) : expanded.add(b.dataset.id);
     render();
   });
