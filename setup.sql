@@ -56,7 +56,49 @@ create policy "scores_insert" on scores for insert to authenticated with check (
 create policy "scores_delete" on scores for delete to authenticated using (user_id = auth.uid());
 
 insert into maps (name) values
-  ('Summer 1'),('Summer 2'),('Summer 3'),('Summer 4'),('Summer 5'),('Summer 6'),('Summer 7'),
+  ('Summer 1'),('Summer 2'),('Summer 3'),('Summer 4'),('Summer 5'),
   ('Winter 1'),('Winter 2'),('Winter 3'),('Winter 4'),('Winter 5'),
   ('Desert 1'),('Desert 2'),('Desert 3'),('Desert 4'),('Desert 5')
 on conflict do nothing;
+
+-- ---------- Freigaben für die Webseite (neuere Supabase-Projekte machen das nicht mehr automatisch) ----------
+grant usage on schema public to anon, authenticated;
+grant select on maps, scores to anon, authenticated;
+grant insert on maps, scores to authenticated;
+grant delete on scores to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
+-- ---------- Chat ----------
+create table if not exists messages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  name text not null check (char_length(name) between 1 and 30),
+  text text not null check (char_length(btrim(text)) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+create index if not exists messages_created_idx on messages (created_at);
+
+-- Absender, Name und Zeit kommen immer vom Server (nicht vom Browser)
+create or replace function set_message_owner() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  new.user_id := auth.uid();
+  new.name := coalesce(nullif(left(split_part(coalesce(auth.jwt() ->> 'email', ''), '@', 1), 30), ''), 'unbekannt');
+  new.text := btrim(new.text);
+  new.created_at := now();
+  return new;
+end $$;
+drop trigger if exists message_owner on messages;
+create trigger message_owner before insert on messages
+  for each row execute function set_message_owner();
+
+alter table messages enable row level security;
+drop policy if exists "messages_select" on messages;
+drop policy if exists "messages_insert" on messages;
+drop policy if exists "messages_delete" on messages;
+-- Chat lesen und schreiben nur eingeloggt, löschen nur eigene Nachrichten
+create policy "messages_select" on messages for select to authenticated using (true);
+create policy "messages_insert" on messages for insert to authenticated with check (user_id = auth.uid());
+create policy "messages_delete" on messages for delete to authenticated using (user_id = auth.uid());
+
+grant select, insert, delete on messages to authenticated;
