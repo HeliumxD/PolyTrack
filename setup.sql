@@ -102,3 +102,11 @@ create policy "messages_insert" on messages for insert to authenticated with che
 create policy "messages_delete" on messages for delete to authenticated using (user_id = auth.uid());
 
 grant select, insert, delete on messages to authenticated;
+
+-- ---------- Weltrekord pro Map (manuell eingetragen) ----------
+alter table maps add column if not exists wr_ms integer check (wr_ms is null or (wr_ms > 0 and wr_ms <= 86400000));
+alter table maps add column if not exists wr_name text check (wr_name is null or char_length(wr_name) <= 40);
+-- Eingeloggte dürfen bei Maps nur den Weltrekord ändern (nicht den Namen o. Ä.)
+drop policy if exists "maps_update_wr" on maps;
+create policy "maps_update_wr" on maps for update to authenticated using (true) with check (true);
+grant update (wr_ms, wr_name) on maps to authenticated;
