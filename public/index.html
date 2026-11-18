@@ -565,6 +565,7 @@ function render() {
   }).join('');
 
   document.querySelectorAll('button.wr').forEach((b) => b.onclick = () => editWorldRecord(b.dataset.id));
+  document.querySelectorAll('.more').forEach((b) => b.onclick = () => {
     expanded.has(b.dataset.id) ? expanded.delete(b.dataset.id) : expanded.add(b.dataset.id);
     render();
   });
