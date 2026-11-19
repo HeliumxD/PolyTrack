@@ -92,6 +92,7 @@
   .banner .wr.none { color: var(--muted); font-weight: 400; }
   .banner button.wr { cursor: pointer; }
   .banner button.wr:hover { text-decoration: underline; }
+  .banner .top { display: block; margin: 2px 0 0 34px; font-size: 12px; color: #a9b0c2; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
   .body { padding: 6px 16px 14px; }
   .card button.primary { background: var(--c1); }
   .card button.primary:hover { background: var(--c2); }
@@ -500,6 +501,26 @@ function wrHtml(m) {
   return session ? `<button class="wr none" type="button" data-id="${m.id}">🌍 WR eintragen</button>` : '';
 }
 
+// ---------- Wann wurde unser Top-Score erreicht? ----------
+function daysAgo(iso) {
+  const day = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const n = Math.round((day(new Date()) - day(new Date(iso))) / 864e5);
+  if (n <= 0) return 'heute';
+  if (n === 1) return 'gestern';
+  if (n < 14) return `vor ${n} Tagen`;
+  if (n < 60) return `vor ${Math.floor(n / 7)} Wochen`;
+  if (n < 730) return `vor ${Math.floor(n / 30)} Monaten`;
+  return `vor ${Math.floor(n / 365)} Jahren`;
+}
+function topHtml(m) {
+  // rowsFor sortiert bei gleicher Zeit nach Datum: rows[0] ist also, wer die Top-Zeit zuerst erreicht hat
+  const top = rowsFor(m.id, true)[0];
+  if (!top) return '';
+  const d = new Date(top.date);
+  const tip = `${top.name}: ${fmt(top.ms)} am ${d.toLocaleString('de-CH')}`;
+  return `<span class="top" title="${esc(tip)}">🥇 Top-Score vom ${d.toLocaleDateString('de-CH')} · ${daysAgo(top.date)}</span>`;
+}
+
 async function editWorldRecord(mapId) {
   const m = data.maps.find((x) => x.id === mapId);
   if (!m) return;
@@ -552,7 +573,7 @@ function render() {
       ? `<button class="more" data-id="${m.id}">${open ? 'Weniger anzeigen' : `Alle ${rows.length} anzeigen`}</button>` : '';
     const t = themeFor(m.name);
     return `<section class="card" data-map="${m.id}" style="--c1:${t.c1};--c2:${t.c2};--pat:${t.pat}">
-      <div class="banner"><div><h2><span class="ico">${t.ico}</span>${esc(m.name)}</h2>${wrHtml(m)}</div><small>${rows.length} ${rows.length === 1 ? 'Zeit' : 'Zeiten'}</small></div>
+      <div class="banner"><div><h2><span class="ico">${t.ico}</span>${esc(m.name)}</h2>${wrHtml(m)}${topHtml(m)}</div><small>${rows.length} ${rows.length === 1 ? 'Zeit' : 'Zeiten'}</small></div>
       <div class="body">
       ${table}${more}
       ${session ? `<form class="quick" data-id="${m.id}" autocomplete="off">
